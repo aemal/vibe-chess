@@ -381,6 +381,100 @@ export function parseFEN(fen: string): { board: BoardState; turn: PieceColor; ca
   }
 }
 
+// Parse PGN move notation and find the corresponding move
+export function parsePGNMove(
+  board: BoardState, 
+  pgn: string, 
+  color: PieceColor,
+  castlingRights: CastlingRights
+): { from: Square; to: Square } | null {
+  const trimmedPgn = pgn.trim().replace(/[+#!?]+$/, ''); // Remove check/mate/annotation symbols
+  
+  // Handle castling
+  if (trimmedPgn === 'O-O' || trimmedPgn === '0-0') {
+    const row = color === 'white' ? 7 : 0;
+    // Check if castling is allowed
+    const canCastle = color === 'white' ? castlingRights.whiteKingSide : castlingRights.blackKingSide;
+    if (!canCastle) return null;
+    return { from: { row, col: 4 }, to: { row, col: 6 } };
+  }
+  
+  if (trimmedPgn === 'O-O-O' || trimmedPgn === '0-0-0') {
+    const row = color === 'white' ? 7 : 0;
+    const canCastle = color === 'white' ? castlingRights.whiteQueenSide : castlingRights.blackQueenSide;
+    if (!canCastle) return null;
+    return { from: { row, col: 4 }, to: { row, col: 2 } };
+  }
+
+  // Parse the move notation
+  // Examples: e4, Nf3, Bxc6, exd5, Qh5, R1a3, Nbd2, etc.
+  const files = 'abcdefgh';
+  const ranks = '12345678';
+  
+  // Regex to parse PGN move
+  // Group 1: Piece type (optional, empty for pawn)
+  // Group 2: Disambiguation file (optional)
+  // Group 3: Disambiguation rank (optional)
+  // Group 4: Capture indicator (optional)
+  // Group 5: Target file
+  // Group 6: Target rank
+  // Group 7: Promotion piece (optional)
+  const moveRegex = /^([KQRBN])?([a-h])?([1-8])?(x)?([a-h])([1-8])(=[QRBN])?$/;
+  const match = trimmedPgn.match(moveRegex);
+  
+  if (!match) return null;
+  
+  const [, pieceChar, disambigFile, disambigRank, , targetFile, targetRank] = match;
+  
+  // Determine piece type
+  const pieceTypeMap: Record<string, PieceType> = {
+    'K': 'king',
+    'Q': 'queen',
+    'R': 'rook',
+    'B': 'bishop',
+    'N': 'knight',
+  };
+  const pieceType: PieceType = pieceChar ? pieceTypeMap[pieceChar] : 'pawn';
+  
+  // Target square
+  const toCol = files.indexOf(targetFile);
+  const toRow = 8 - parseInt(targetRank);
+  const to: Square = { row: toRow, col: toCol };
+  
+  // Find all pieces of the correct type and color that can move to the target
+  const candidates: Square[] = [];
+  
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece || piece.type !== pieceType || piece.color !== color) continue;
+      
+      // Check disambiguation
+      if (disambigFile && files[col] !== disambigFile) continue;
+      if (disambigRank && (8 - row).toString() !== disambigRank) continue;
+      
+      // Check if this piece can move to the target
+      const validMoves = getValidMoves(board, { row, col }, castlingRights);
+      if (validMoves.some(m => m.row === toRow && m.col === toCol)) {
+        candidates.push({ row, col });
+      }
+    }
+  }
+  
+  // Should have exactly one candidate
+  if (candidates.length === 1) {
+    return { from: candidates[0], to };
+  }
+  
+  // If multiple candidates, we need better disambiguation (shouldn't happen with correct PGN)
+  if (candidates.length > 1) {
+    console.warn('Ambiguous move:', pgn, candidates);
+    return { from: candidates[0], to }; // Return first match as fallback
+  }
+  
+  return null;
+}
+
 // Generate FEN string from current game state
 export function generateFEN(board: BoardState, turn: PieceColor, castlingRights: CastlingRights): string {
   const pieceToFen: Record<PieceType, string> = {

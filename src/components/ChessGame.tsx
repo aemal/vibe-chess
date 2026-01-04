@@ -5,6 +5,7 @@ import { ChessBoard } from './ChessBoard';
 import { MoveHistory } from './MoveHistory';
 import { GameInfo } from './GameInfo';
 import { FENModal } from './FENModal';
+import { MoveExecutor } from './MoveExecutor';
 import { useChessGame } from '@/hooks/useChessGame';
 
 export const ChessGame: React.FC = () => {
@@ -20,6 +21,7 @@ export const ChessGame: React.FC = () => {
     resetGame,
     clearHistory,
     loadFromFEN,
+    executePGNMove,
   } = useChessGame();
 
   const [isFENModalOpen, setIsFENModalOpen] = useState(false);
@@ -46,14 +48,18 @@ export const ChessGame: React.FC = () => {
 
         {/* Main game area */}
         <div className="flex flex-col lg:flex-row items-start justify-center gap-6">
-          {/* Left sidebar - Game Info */}
-          <div className="w-full lg:w-auto order-2 lg:order-1">
+          {/* Left sidebar - Game Info & Move Executor */}
+          <div className="w-full lg:w-auto order-2 lg:order-1 space-y-4">
             <GameInfo
               currentTurn={currentTurn}
               capturedByWhite={capturedByWhite}
               capturedByBlack={capturedByBlack}
               onNewGame={resetGame}
               onLoadPosition={() => setIsFENModalOpen(true)}
+            />
+            <MoveExecutor
+              currentTurn={currentTurn}
+              onExecuteMove={executePGNMove}
             />
           </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BoardState, Square, Piece, PieceColor, Move, CastlingRights } from '@/types/chess';
-import { initializeBoard, makeMove as makeBoardMove, generateMoveNotation, initializeCastlingRights, updateCastlingRights, isCastlingMove, parseFEN, generateFEN } from '@/utils/chess';
+import { initializeBoard, makeMove as makeBoardMove, generateMoveNotation, initializeCastlingRights, updateCastlingRights, isCastlingMove, parseFEN, generateFEN, parsePGNMove } from '@/utils/chess';
 import { saveMoves, loadMoves, clearMoves } from '@/utils/storage';
 
 interface UseChessGameReturn {
@@ -17,6 +17,7 @@ interface UseChessGameReturn {
   resetGame: () => void;
   clearHistory: () => void;
   loadFromFEN: (fen: string) => boolean;
+  executePGNMove: (pgn: string, color: PieceColor) => boolean;
 }
 
 export function useChessGame(): UseChessGameReturn {
@@ -131,6 +132,46 @@ export function useChessGame(): UseChessGameReturn {
     return true;
   }, []);
 
+  const executePGNMove = useCallback((pgn: string, color: PieceColor): boolean => {
+    // Parse the PGN move to get from/to squares
+    const moveResult = parsePGNMove(board, pgn, color, castlingRights);
+    if (!moveResult) return false;
+
+    const { from, to } = moveResult;
+    const piece = board[from.row][from.col];
+    if (!piece) return false;
+
+    // Execute the move
+    const result = makeBoardMove(board, from, to);
+    const castlingType = isCastlingMove(piece, from, to);
+
+    const move: Move = {
+      from,
+      to,
+      piece,
+      captured: result.captured || undefined,
+      timestamp: Date.now(),
+      notation: '',
+      isCastling: castlingType || undefined,
+    };
+    move.notation = generateMoveNotation(move);
+
+    setBoard(result.newBoard);
+    setMoves(prev => [...prev, move]);
+    setCurrentTurn(prev => prev === 'white' ? 'black' : 'white');
+    setCastlingRights(prev => updateCastlingRights(prev, piece, from));
+
+    if (result.captured) {
+      if (piece.color === 'white') {
+        setCapturedByWhite(prev => [...prev, result.captured!]);
+      } else {
+        setCapturedByBlack(prev => [...prev, result.captured!]);
+      }
+    }
+
+    return true;
+  }, [board, castlingRights]);
+
   // Generate current FEN
   const currentFEN = generateFEN(board, currentTurn, castlingRights);
 
@@ -146,6 +187,7 @@ export function useChessGame(): UseChessGameReturn {
     resetGame,
     clearHistory,
     loadFromFEN,
+    executePGNMove,
   };
 }
 
