@@ -1,0 +1,360 @@
+{
+  "name": "Chess Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "builtInTools": {},
+        "options": {
+          "timeout": 6000000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -40,
+        96
+      ],
+      "id": "83f3c35f-5b71-4b57-bc49-5a25a8511dd5",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "WUVxq8pscYNpkcLo",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a47750d1-a10c-484e-8885-ab20f0891a29",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        -128
+      ],
+      "id": "c65a7de8-cf08-432d-856f-e61b8a9d2d10",
+      "name": "Webhook",
+      "webhookId": "a47750d1-a10c-484e-8885-ab20f0891a29"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"move_number\": 1,\n  \"move\": \"... Nxa1\",\n  \"evaluation\": -4.0,\n  \"analysis\": {\n    \"enemy_king_safety\": 7.5,\n    \"own_king_safety\": 7.0,\n    \"own_material\": 21,\n    \"enemy_material\": 25,\n    \"piece_activity_and_dynamics\": 5.5\n  },\n  \"pgn_next_move\": \"1. ... Nxa1\",\n  \"fen_after_move\": \"n7/p3q1kp/1p2Pnp1/3pQ3/2pP4/2P3N1/1B4PP/6K1 w - - 1 2\"\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        88,
+        96
+      ],
+      "id": "3930d4dc-cabb-410e-9f73-360ef2f5c976",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evaluate this move: \n\nFEN: \n{{ $('Webhook').item.json.body.fen }}\n\nPGN next move: \n{{ $json.output.pgn_next_move }}\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a chess master, you evaluate chess moves. You are given a move in PGN format and the current chess board state in FEN format. Your task is to evaluate whether the move is legal."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        304,
+        -128
+      ],
+      "id": "a7e8be43-a8f2-45a7-9767-b6567c3f81e7",
+      "name": "Move Evaluator AI Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Give me the best move you would think for the following FEN: \n\n{{ $json.body.fen }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Play a game of chess. You play as black. \n\nUnless otherwise instructed, just give your moves in PGN notation. (e.g. 2. ...Nf6). Also give your current evaluation score and the score for all the criteria listed below with each move. Don't explain them, unless prompted to do so. \n\nTry to make the best moves possible. Use the criteria below as guidance. You may deviate from them or disregard them completely for a move, if you're convinced that the move you want to make is better than the one you would make following the criteria. If you do so, please indicate briefly that you did and your reason for doing so when giving your move.\n\nNotation: \nPlease save the moves in standard PGN notation and the current position in FEN format. Ensure that each move in the game is recorded in PGN, and save the FEN of the position after every move.\n\n\nEvaluation and choosing a move: \n\nWhen evaluating a position, focus on achieving one of the following:\n\nA position where the enemy King’s safety is below 3.\n\nA position where your own King’s safety is strong, and you can improve your material and piece activity.\n\nA position where you improve your overall score according to the evaluation equation. \n\nAvoid positions with poor material balance, weak piece activity, and exposed kings unless there’s a clear opportunity to attack.\n\nUse the following rules to evaluate the position:\n\nIf the enemy King’s safety is below 3, prioritize finding a winning attack.\n\nIf the own King’s safety is below 3, focus on defending and avoiding significant material loss.\n\nIn all other cases, use the evaluation equation:\n\nEvaluation = (1/2 * enemy king-safety) - (1/2 * own king-safety) + (own material - enemy material) + (1/2 * (piece activity & dynamics - 5))\n\nUse the following point system to evaluate the material balance: Queen = 9 points, Rook = 5 points, Knight = 3 points, Bishop = 3 points, Pawn = 1 point. Calculate the total material for both sides at any given point in the game.\n\nEvaluate the safety of the own/enemy King on a scale of 1 to 10:\n1 = Forced mate\n4 = Exposed to dangerous attack\n7 = Some weaknesses, but under no immediate threat\n10 = Very safe\nTake these as benchmarks. Numbers in between are possible. Use a precision of one decimal point. \n\nEvaluate piece activity and dynamics on a scale of 1 to 10:\n1 = Pieces are completely useless\n4 = Pieces are uncoordinated or have little scope\n7 = Decent piece coordination and activity\n10 = Stellar piece activity and coordination\nTake these as benchmarks. Numbers in between are possible. Use a precision of one decimal point. \n\nAny position with an evaluation above 0 is considered better for the agent, and any evaluation below 0 is worse.\n\n\nIMPORTANT NOTES:\n- Fill the pgn_next_move\" object only with the next move not the entire pgn or fen notation"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        -128
+      ],
+      "id": "0f5f0606-c382-4c5b-92eb-bf7bb944c975",
+      "name": "Move Generator AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "medium",
+          "timeout": 600000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        312,
+        96
+      ],
+      "id": "a9ac9a1e-6bac-4f8e-b071-8a8bb4204eae",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "WUVxq8pscYNpkcLo",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"validMove\": true\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        440,
+        96
+      ],
+      "id": "036a4f22-ef93-4a53-a9fc-b9e854ad0cba",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7e36e6ae-c8c0-4b1a-bb22-983e250404f1",
+              "leftValue": "={{ $json.output.validMove }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        -128
+      ],
+      "id": "dacfa04d-1e93-42f5-b852-8db42bbfadf4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"pgn_next_move\": \"{{ $('Move Generator AI Agent').item.json.output.pgn_next_move }}\"\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        -224
+      ],
+      "id": "19983c27-c2c3-482c-9c97-59cafd2f89c1",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"error\": \"Failed to generate a move\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        -32
+      ],
+      "id": "2e2f19e0-4110-4278-96a7-c5f7a4635841",
+      "name": "Respond to Webhook1"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "aemal.app.n8n.cloud",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "content-length": "61",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-GB,en;q=0.9",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "46.142.193.157",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "DE",
+            "cf-ray": "9b8e44aa01debb59-FRA",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "origin": "http://localhost:3001",
+            "priority": "u=1, i",
+            "referer": "http://localhost:3001/",
+            "sec-ch-ua": "\"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "46.142.193.157, 172.70.243.92",
+            "x-forwarded-host": "aemal.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-44-68df68bcf-xw52r",
+            "x-is-trusted": "yes",
+            "x-real-ip": "46.142.193.157"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "fen": "8/p3q1kp/1p2Pnp1/3pQ3/2pP4/BnP3N1/6PP/6K1 b - - 0 1"
+          },
+          "webhookUrl": "https://aemal.app.n8n.cloud/webhook/a47750d1-a10c-484e-8885-ab20f0891a29",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Move Generator AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Move Generator AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Move Generator AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Generator AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Move Evaluator AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Move Evaluator AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Move Evaluator AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Evaluator AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2578820c-4835-4068-973e-d3a75d257140",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "61d1ceb8b60d551b2bd6cb318774870200f11403fbfe4e124bc9e07f08b20486"
+  },
+  "id": "oKp3KFh5QaDnKJ89",
+  "tags": []
+}

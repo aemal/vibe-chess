@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChessBoard } from './ChessBoard';
 import { MoveHistory } from './MoveHistory';
 import { GameInfo } from './GameInfo';
 import { FENModal } from './FENModal';
 import { MoveExecutor } from './MoveExecutor';
+import { ToastContainer, ToastMessage } from './Toast';
 import { useChessGame } from '@/hooks/useChessGame';
 
 export const ChessGame: React.FC = () => {
@@ -17,6 +18,9 @@ export const ChessGame: React.FC = () => {
     capturedByBlack,
     castlingRights,
     currentFEN,
+    isAIThinking,
+    aiError,
+    clearAIError,
     handleMove,
     resetGame,
     clearHistory,
@@ -25,6 +29,24 @@ export const ChessGame: React.FC = () => {
   } = useChessGame();
 
   const [isFENModalOpen, setIsFENModalOpen] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Show toast when AI error occurs
+  useEffect(() => {
+    if (aiError) {
+      const newToast: ToastMessage = {
+        id: Date.now().toString(),
+        type: 'error',
+        message: aiError,
+      };
+      setToasts(prev => [...prev, newToast]);
+      clearAIError();
+    }
+  }, [aiError, clearAIError]);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-8 px-4">
@@ -54,6 +76,8 @@ export const ChessGame: React.FC = () => {
               currentTurn={currentTurn}
               capturedByWhite={capturedByWhite}
               capturedByBlack={capturedByBlack}
+              currentFEN={currentFEN}
+              isAIThinking={isAIThinking}
               onNewGame={resetGame}
               onLoadPosition={() => setIsFENModalOpen(true)}
             />
@@ -99,6 +123,9 @@ export const ChessGame: React.FC = () => {
         onLoadFEN={loadFromFEN}
         currentFEN={currentFEN}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

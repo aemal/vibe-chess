@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { PieceColor, Piece } from '@/types/chess';
 import { ChessPiece } from './pieces';
 
@@ -8,6 +8,8 @@ interface GameInfoProps {
   currentTurn: PieceColor;
   capturedByWhite: Piece[];
   capturedByBlack: Piece[];
+  currentFEN: string;
+  isAIThinking?: boolean;
   onNewGame: () => void;
   onLoadPosition: () => void;
 }
@@ -16,9 +18,22 @@ export const GameInfo: React.FC<GameInfoProps> = ({
   currentTurn,
   capturedByWhite,
   capturedByBlack,
+  currentFEN,
+  isAIThinking = false,
   onNewGame,
   onLoadPosition,
 }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyFEN = async () => {
+    try {
+      await navigator.clipboard.writeText(currentFEN);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy FEN:', err);
+    }
+  };
   const pieceValues: Record<string, number> = {
     queen: 9,
     rook: 5,
@@ -63,6 +78,18 @@ export const GameInfo: React.FC<GameInfoProps> = ({
             <span className="font-semibold text-sm capitalize">{currentTurn}</span>
           </div>
         </div>
+        
+        {/* AI Thinking Indicator */}
+        {isAIThinking && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-indigo-300 text-sm font-medium">AI is thinking...</span>
+          </div>
+        )}
       </div>
 
       {/* Captured pieces - White's captures */}
@@ -112,6 +139,42 @@ export const GameInfo: React.FC<GameInfoProps> = ({
           }`}>
             {scoreDiff === 0 ? 'Even' : scoreDiff > 0 ? `White +${scoreDiff}` : `Black +${Math.abs(scoreDiff)}`}
           </span>
+        </div>
+      </div>
+
+      {/* Current FEN */}
+      <div className="p-4 border-b border-slate-700/50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-slate-400 text-sm">Current FEN</span>
+          <button
+            onClick={handleCopyFEN}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              copied
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 hover:text-white'
+            }`}
+          >
+            {copied ? (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Copied!
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </>
+            )}
+          </button>
+        </div>
+        <div className="bg-slate-900/50 rounded-lg p-2 border border-slate-700/30">
+          <code className="text-xs text-amber-400/90 font-mono break-all leading-relaxed">
+            {currentFEN}
+          </code>
         </div>
       </div>
 

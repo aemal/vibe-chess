@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BoardState, Square, Piece, PieceColor, Move, CastlingRights } from '@/types/chess';
 import { initializeBoard, makeMove as makeBoardMove, generateMoveNotation, initializeCastlingRights, updateCastlingRights, isCastlingMove, parseFEN, generateFEN, parsePGNMove } from '@/utils/chess';
 import { saveMoves, loadMoves, clearMoves } from '@/utils/storage';
+import { fetchNextMove } from '@/utils/api';
 
 interface UseChessGameReturn {
   board: BoardState;
@@ -13,6 +14,9 @@ interface UseChessGameReturn {
   capturedByBlack: Piece[];
   castlingRights: CastlingRights;
   currentFEN: string;
+  isAIThinking: boolean;
+  aiError: string | null;
+  clearAIError: () => void;
   handleMove: (from: Square, to: Square, captured: Piece | null) => void;
   resetGame: () => void;
   clearHistory: () => void;
@@ -28,6 +32,15 @@ export function useChessGame(): UseChessGameReturn {
   const [capturedByBlack, setCapturedByBlack] = useState<Piece[]>([]);
   const [castlingRights, setCastlingRights] = useState<CastlingRights>(() => initializeCastlingRights());
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const [aiError, setAIError] = useState<string | null>(null);
+  
+  // Ref to track if AI move is in progress to prevent duplicate calls
+  const aiMoveInProgress = useRef(false);
+
+  const clearAIError = useCallback(() => {
+    setAIError(null);
+  }, []);
 
   // Load moves from localStorage on mount
   useEffect(() => {
@@ -68,6 +81,82 @@ export function useChessGame(): UseChessGameReturn {
       saveMoves(moves);
     }
   }, [moves, isInitialized]);
+
+  // Auto-trigger AI move when it's black's turn
+  useEffect(() => {
+    if (!isInitialized || currentTurn !== 'black' || aiMoveInProgress.current) {
+      return;
+    }
+
+    const fetchAIMove = async () => {
+      aiMoveInProgress.current = true;
+      setIsAIThinking(true);
+      setAIError(null);
+      
+      try {
+        const currentFEN = generateFEN(board, currentTurn, castlingRights);
+        const response = await fetchNextMove(currentFEN);
+        
+        // Check if the response contains an error
+        if (response.error) {
+          setAIError(response.error);
+          console.error('Chess engine error:', response.error);
+          return;
+        }
+        
+        if (response.pgn_next_move) {
+          // Parse and execute the AI's move
+          const moveResult = parsePGNMove(board, response.pgn_next_move, 'black', castlingRights);
+          
+          if (moveResult) {
+            const { from, to } = moveResult;
+            const piece = board[from.row][from.col];
+            
+            if (piece) {
+              const result = makeBoardMove(board, from, to);
+              const castlingType = isCastlingMove(piece, from, to);
+
+              const move: Move = {
+                from,
+                to,
+                piece,
+                captured: result.captured || undefined,
+                timestamp: Date.now(),
+                notation: '',
+                isCastling: castlingType || undefined,
+              };
+              move.notation = generateMoveNotation(move);
+
+              setBoard(result.newBoard);
+              setMoves(prev => [...prev, move]);
+              setCurrentTurn('white');
+              setCastlingRights(prev => updateCastlingRights(prev, piece, from));
+
+              if (result.captured) {
+                setCapturedByBlack(prev => [...prev, result.captured!]);
+              }
+            }
+          } else {
+            setAIError(`Failed to parse AI move: ${response.pgn_next_move}`);
+            console.error('Failed to parse AI move:', response.pgn_next_move);
+          }
+        } else {
+          setAIError('No move received from chess engine');
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch AI move';
+        setAIError(errorMessage);
+        console.error('Failed to fetch AI move:', error);
+      } finally {
+        setIsAIThinking(false);
+        aiMoveInProgress.current = false;
+      }
+    };
+
+    // Small delay to make the AI response feel more natural
+    const timer = setTimeout(fetchAIMove, 500);
+    return () => clearTimeout(timer);
+  }, [currentTurn, isInitialized, board, castlingRights]);
 
   const handleMove = useCallback((from: Square, to: Square, captured: Piece | null) => {
     const piece = board[from.row][from.col];
@@ -183,6 +272,9 @@ export function useChessGame(): UseChessGameReturn {
     capturedByBlack,
     castlingRights,
     currentFEN,
+    isAIThinking,
+    aiError,
+    clearAIError,
     handleMove,
     resetGame,
     clearHistory,
